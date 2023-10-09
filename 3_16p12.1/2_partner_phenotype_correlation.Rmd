@@ -1,0 +1,148 @@
+---
+title: "16p12 Partner Phenotype Correlations"
+author: "Corrine Smolen"
+date: "2023-04-05"
+output: html_document
+---
+
+```{r}
+library(pheatmap)
+library(correlation)
+```
+
+This notebook is to examine spousal correlations in phenotypes in the 16p12.1 cohort with tetrachoric correlations
+
+```{r}
+phenos <- read.csv('Analysis_Files/1_spouse_phenotypes.csv')
+phenos <- phenos[phenos$spouse_phenotypes=='X', ]
+phenotypes <- c('Seizures', 'Schizophrenic.Features', 'Depression', 'Anxiety', 'Addiction')
+```
+
+```{r}
+two_by_two <- function(df, col1, col2) {
+  a <- length(rownames(df[df[, col1]==1 & df[, col2]==1, ]))
+  b <- length(rownames(df[df[, col1]==1 & df[, col2]==0, ]))
+  c <- length(rownames(df[df[, col1]==0 & df[, col2]==1, ]))
+  d <- length(rownames(df[df[, col1]==0 & df[, col2]==0, ]))
+  if (a==0 | b==0 | c==0 | d==0) {
+    print(col1)
+    print(col2)
+    print(matrix(c(a, b, c, d), 2, 2))
+  }
+  return(c(a, b, c, d))
+}
+  
+tet_chor <- function() {
+  cors <- data.frame()
+  uncorr_p <- data.frame()
+  counts <- data.frame()
+  n <- data.frame()
+  ci_lo <- data.frame()
+  ci_hi <- data.frame()
+  for (d1 in phenotypes) {
+    for (d2 in phenotypes) {
+      col1 <- paste('Carrier', d1, sep='.')
+      col2 <- paste('Noncarrier', d2, sep='.')
+      
+      test_df <- phenos[, c(col1, col2)]
+      
+      # Drop pairs with missing data
+      test_df <- test_df[complete.cases(test_df), ]
+      vals <- two_by_two(test_df, col1, col2)
+      
+      # Skip if one column is all 0
+      if (sum(test_df[, col1], na.rm = T)==0 | sum(test_df[, col2], na.rm = T)==0) {
+        cors[d1, d2] <- NA
+        uncorr_p[d1, d2] <- NA
+        counts[d1, d2] <- paste(vals, collapse='|')
+        n[d1, d2] <- sum(vals)
+      } else {
+        res <- correlation(test_df, method='tetrachoric', select=col1, select2=col2)
+        dat <- res[res$Parameter1==col1 & res$Parameter2==col2, ]
+        cors[d1, d2] <- dat$r
+        uncorr_p[d1, d2] <- dat$p
+        counts[d1, d2] <- paste(vals, collapse='|')
+        n[d1, d2] <- sum(vals)
+        ci_lo[d1, d2] <- dat$CI_low
+        ci_hi[d1, d2] <- dat$CI_high
+      }
+    }
+  }
+
+corr_p <- data.frame(matrix(p.adjust(unlist(uncorr_p), method = 'bonferroni'), nrow = length(phenotypes)))
+rownames(corr_p) <- rownames(uncorr_p)
+colnames(corr_p) <- colnames(uncorr_p)
+  
+return(list(cors=cors, uncorr_p=uncorr_p, corr_p=corr_p, counts=counts, n=n, ci_lo=ci_lo, ci_hi=ci_hi))
+}
+
+make_fake_pmatrix = function(adj_p_mat, unadj_p_mat, or_mat) {
+  or_mat <- apply(or_mat, 2, function(x) round(x, digits = 2))
+  or_mat <- sprintf("%0.2f", or_mat)
+	# create a fake p value matrix
+	# where fdr corrected p < 0.05 gets **
+  # and no corrected p < 0.05 gets *
+	fake_p_matrix <- adj_p_mat
+
+  fake_p_matrix[adj_p_mat <= 0.05] <- 5
+	fake_p_matrix[adj_p_mat <= 0.01] <- 50
+	fake_p_matrix[adj_p_mat <= 0.001] <- 500
+	fake_p_matrix[fake_p_matrix <= 1] <- 2
+	fake_p_matrix[is.na(fake_p_matrix)] <- -1
+	
+	
+	fake_p_matrix[fake_p_matrix == 500] <- paste('***', or_mat[fake_p_matrix==500], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 50] <- paste('**', or_mat[fake_p_matrix==50], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 5] <- paste('*', or_mat[fake_p_matrix==5], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 2] <- paste('', or_mat[fake_p_matrix==2], sep = '\n')
+	fake_p_matrix[fake_p_matrix == -1] <- 'NA'
+	
+	return(fake_p_matrix)
+}
+
+plot_heatmaps <- function(plot = T) {
+  lst <- tet_chor()
+  fake_p <- make_fake_pmatrix(lst$corr_p, lst$uncorr_p, lst$cors)
+  if (plot) {
+  pheatmap(lst$cors, treeheight_row = 0, treeheight_col = 0, display_numbers = fake_p, number_color = 'black',
+                cellwidth = 30, cellheight = 30,
+             main = paste('Tetrachoric Correlation'), legend = T, cluster_rows = F, cluster_cols = F,
+             color=c(colorRampPalette(c("#053061", "#2166AC", "#4393C3", "#92C5DE", "#D1E5F0",
+                                    "#F7F7F7"))(10), colorRampPalette(c("#F7F7F7", "#FDDBC7", "#F4A582", "#D6604D", "#B2182B", "#67001F"))(10)),
+           breaks = c(seq(-0.95, 0, by=0.095), seq(0.095, 0.95, by=0.095)))
+  }
+  return(lst)
+}
+```
+
+```{r}
+pdf('Figures/2_partner_tet_correlation.pdf')
+stat_lst <- plot_heatmaps()
+dev.off()
+```
+
+```{r}
+# Reformat stats
+get_stat_tab <- function(lst) {
+  output <- data.frame(matrix(nrow = length(phenotypes)^2, ncol = 9))
+  colnames(output) <- c('carrier_phenotype', 'noncarrier_phenotype', 'R', 'uncorrected_p', 'bonferroni_p', 'count', 'n', 'ci_low', 'ci_high')
+  
+  output$carrier_phenotype <- unlist(lapply(phenotypes,function(x) rep(x, length(phenotypes))))
+  output$noncarrier_phenotype <- rep(phenotypes, length(phenotypes))
+  
+  for (d1 in phenotypes) {
+    for (d2 in phenotypes) {
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'R'] <- lst$cors[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'uncorrected_p'] <- lst$uncorr_p[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'bonferroni_p'] <- lst$corr_p[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'count'] <- lst$counts[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'n'] <- lst$n[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'ci_low'] <- lst$ci_lo[d1, d2]
+      output[output$carrier_phenotype==d1 & output$noncarrier_phenotype==d2, 'ci_high'] <- lst$ci_hi[d1, d2]
+    }
+  }
+  return(output)
+}
+stat_df <- get_stat_tab(stat_lst)
+write.csv(stat_df, 'Result_tables/2_partner_phenotype_correlations.csv', row.names = F)
+```

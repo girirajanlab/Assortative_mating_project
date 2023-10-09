@@ -1,0 +1,169 @@
+---
+title: "Parent Child Phenotypic Correlation"
+author: "Corrine Smolen"
+date: "2023-04-05"
+output: html_document
+---
+
+```{r}
+library(pheatmap)
+library(correlation)
+```
+
+Use parent phenotypes to predict child phenotypes using tetrachoric correlations
+
+```{r}
+# Phenotype data
+phenos <- read.csv('Analysis_files/1_family_phenotypes.csv')
+phenos <- phenos[phenos$parent_child=='X', ]
+phenotypes <- c('behav_adhd', 'mood_anx', 'mood_bipol', 'mood_dep', 'mood_ocd', 'pers_dis', 'sleep_dx')
+```
+
+```{r}
+print(colSums(phenos[phenos$sex=='Male', 4:26], na.rm = T))
+```
+
+```{r}
+print(colSums(phenos[phenos$sex=='Female', 4:26], na.rm = T))
+```
+
+Remove personality disorder due to low sample size (<30 probands)
+```{r}
+phenotypes <- c('behav_adhd', 'mood_anx', 'mood_bipol', 'mood_dep', 'mood_ocd', 'sleep_dx')
+```
+
+```{r}
+two_by_two <- function(df, col1, col2) {
+  a <- length(rownames(df[df[, col1]==1 & df[, col2]==1, ]))
+  b <- length(rownames(df[df[, col1]==1 & df[, col2]==0, ]))
+  c <- length(rownames(df[df[, col1]==0 & df[, col2]==1, ]))
+  d <- length(rownames(df[df[, col1]==0 & df[, col2]==0, ]))
+  if (a==0 | b==0 | c==0 | d==0) {
+    print(col1)
+    print(col2)
+    print(matrix(c(a, b, c, d), 2, 2))
+  }
+  return(c(a, b, c, d))
+}
+
+tet_chor <- function(parent, df) {
+  cors <- data.frame()
+  uncorr_p <- data.frame()
+  counts <- data.frame()
+  n <- data.frame()
+  ci_lo <- data.frame()
+  ci_hi <- data.frame()
+  for (d1 in phenotypes) {
+    for (d2 in phenotypes) {
+      col1 <- paste(d1, 'proband', sep='_')
+      col2 <- paste(d2, parent, sep='_')
+      test_df <- df[, c(col1, col2)]
+      test_df <- test_df[complete.cases(test_df), ]
+      
+      vals <- two_by_two(test_df, col1, col2)
+      if (sum(test_df[, col1], na.rm = T)==0 | sum(test_df[, col2], na.rm = T)==0) {
+        cors[d1, d2] <- NA
+        uncorr_p[d1, d2] <- NA
+        counts[d1, d2] <- paste(vals, collapse='|')
+        n[d1, d2] <- sum(vals)
+        ci_lo[d1, d2] <- NA
+        ci_hi[d1, d2] <- NA
+      } else {
+        res <- correlation(test_df, method='tetrachoric')
+        dat <- res[res$Parameter1==col1 & res$Parameter2==col2, ]
+        cors[d1, d2] <- dat$r
+        uncorr_p[d1, d2] <- dat$p
+        counts[d1, d2] <- paste(vals, collapse='|')
+        n[d1, d2] <- sum(vals)
+        ci_lo[d1, d2] <- dat$CI_low
+        ci_hi[d1, d2] <- dat$CI_high
+      }
+    }
+  }
+
+corr_p <- data.frame(matrix(p.adjust(unlist(uncorr_p), method = 'bonferroni'), nrow = length(phenotypes)))
+rownames(corr_p) <- rownames(uncorr_p)
+colnames(corr_p) <- colnames(uncorr_p)
+  
+return(list(cors=cors, uncorr_p=uncorr_p, corr_p=corr_p, counts=counts, n=n, ci_lo=ci_lo, ci_hi=ci_hi))
+}
+
+make_fake_pmatrix = function(adj_p_mat, unadj_p_mat, or_mat) {
+  or_mat <- apply(or_mat, 2, function(x) round(x, digits = 2))
+  or_mat <- sprintf("%0.2f", or_mat)
+	# create a fake p value matrix
+	# where fdr corrected p < 0.05 gets **
+  # and no corrected p < 0.05 gets *
+	fake_p_matrix <- adj_p_mat
+
+  fake_p_matrix[adj_p_mat <= 0.05] <- 5
+	fake_p_matrix[adj_p_mat <= 0.01] <- 50
+	fake_p_matrix[adj_p_mat <= 0.001] <- 500
+	fake_p_matrix[fake_p_matrix <= 1] <- 2
+	
+	fake_p_matrix[fake_p_matrix == 500] <- paste('***', or_mat[fake_p_matrix==500], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 50] <- paste('**', or_mat[fake_p_matrix==50], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 5] <- paste('*', or_mat[fake_p_matrix==5], sep = '\n')
+	fake_p_matrix[fake_p_matrix == 2] <- paste('', or_mat[fake_p_matrix==2], sep = '\n')
+	
+	return(fake_p_matrix)
+}
+
+plot_heatmaps <- function(parent, df, sex, plot = T) {
+  lst <- tet_chor(parent, df)
+  fake_p <- make_fake_pmatrix(lst$corr_p, lst$uncorr_p, lst$cors)
+  if (plot) {
+  pheatmap(lst$cors, treeheight_row = 0, treeheight_col = 0, display_numbers = fake_p, number_color = 'black',
+                cellwidth = 30, cellheight = 30,
+             main = paste(parent, ' - ', sex, ' probands - Tetrachoric Correlation'), legend = T, cluster_rows = F, cluster_cols = F,
+             color=c(colorRampPalette(c("#053061", "#2166AC", "#4393C3", "#92C5DE", "#D1E5F0",
+                                    "#F7F7F7"))(10), colorRampPalette(c("#F7F7F7", "#FDDBC7", "#F4A582", "#D6604D", "#B2182B", "#67001F"))(10)),
+           breaks = c(seq(-0.5, 0, by=0.05), seq(0.05, 0.5, by=0.05)))
+  }
+  return(lst)
+}
+```
+
+```{r}
+pdf('Figures/3_parent_child_phenotype_correlation.pdf')
+mmother_lst <- plot_heatmaps('mother', phenos[phenos$sex=='Male', ], 'male')
+mfather_lst <- plot_heatmaps('father', phenos[phenos$sex=='Male', ], 'male')
+fmother_lst <- plot_heatmaps('mother', phenos[phenos$sex=='Female', ], 'female')
+ffather_lst <- plot_heatmaps('father', phenos[phenos$sex=='Female', ], 'female')
+dev.off()
+```
+
+```{r}
+# Reformat stats
+get_stat_tab <- function(lst, parent, sex) {
+  output <- data.frame(matrix(nrow = length(phenotypes)^2, ncol = 11))
+  colnames(output) <- c('parent', 'sex', 'proband_phenotype', 'parent_phenotype', 'R', 'uncorrected_p', 'bonferroni_p', 'counts', 'n', 'ci_low', 'ci_high')
+  
+  output$sex <- sex
+  output$parent <- parent
+  output$proband_phenotype <- unlist(lapply(phenotypes, function(x) rep(x, length(phenotypes))))
+  output$parent_phenotype <- rep(phenotypes, length(phenotypes))
+  
+  for (d1 in phenotypes) {
+    for (d2 in phenotypes) {
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'R'] <- lst$cors[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'uncorrected_p'] <- lst$uncorr_p[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'bonferroni_p'] <- lst$corr_p[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'counts'] <- lst$counts[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'n'] <- lst$n[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'ci_low'] <- lst$ci_lo[d1, d2]
+      output[output$proband_phenotype==d1 & output$parent_phenotype==d2, 'ci_high'] <- lst$ci_hi[d1, d2]
+    }
+  }
+  return(output)
+}
+
+df <- get_stat_tab(mmother_lst, 'Mother', 'male')
+df <- rbind(df, get_stat_tab(mfather_lst, 'Father', 'male'))
+df <- rbind(df, get_stat_tab(fmother_lst, 'Mother', 'female'))
+df <- rbind(df, get_stat_tab(ffather_lst, 'Father', 'female'))
+
+write.csv(df, 'Result_tables/3_parent_child_phenotype_correlation.csv', row.names = F)
+```
+
+
