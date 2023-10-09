@@ -1,6 +1,7 @@
 # Description
 Pipelines and scripts used to perform the bioinformatics analyses examining the parental factors driving pathogenicity of variably expressive variants.
 
+Preprocessing of files are very similar for all cohorts, but scripts for each cohort are provided in 0_preprocessing.
 Analyses of each cohort are primarily organized by the cohort of interest and files related to analyses for each cohort can be found in their respective directories.
 
 # Copyright/License
