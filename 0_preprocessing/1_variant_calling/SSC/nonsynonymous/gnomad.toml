@@ -1,0 +1,11 @@
+[[annotation]]
+file="hg38/annotations/processed_annotations/gnomad.exomes.r2.1.1.sites.liftover_grch38.AF.vcf.gz"
+fields = ["AF"]
+ops=["self"]
+names=["gnomad_genome_AF"]
+
+[[annotation]]
+file="hg38/annotations/processed_annotations/gnomad.genomes.r2.1.1.sites.liftover_grch38.AF.vcf.gz"
+fields = ["AF"]
+ops=["self"]
+names=["gnomad_exome_AF"]
