@@ -7,9 +7,9 @@ Analyses of each cohort are primarily organized by the cohort of interest and fi
 A brief description of each repository is provided below:
 
 **0_preprocessing**: This directory holds all of the data pre-processing scripts and is broken into separate directories for the three main types of pre-processed data used in the manuscript.  
-\t*1_variant_calling*: Scripts related to SNV calling in each cohort.  
-\t*2_kinship_PCs*: Scripts for calculating kinship coefficients between spouses and genetic principal components for each sample in each cohort.  
-\t*3_ROH*: Scripts for calculting runs of homozygosity in probands in SPARK and SSC.  
+&nbsp;&nbsp;&nbsp;&nbsp;*1_variant_calling*: Scripts related to SNV calling in each cohort.  
+&nbsp;&nbsp;&nbsp;&nbsp;*2_kinship_PCs*: Scripts for calculating kinship coefficients between spouses and genetic principal components for each sample in each cohort.  
+&nbsp;&nbsp;&nbsp;&nbsp;*3_ROH*: Scripts for calculting runs of homozygosity in probands in SPARK and SSC.  
 **1_SPARK**: This directory holds scripts related to analyses involving samples from the SPARK cohort, including those shown in Fig. 1A, 1C, 2C, and 3B  
 **2_SSC**: This directory holds scripts related to analyses involving samples from the SSC cohort, including those shown in Fig. 1B, 2E-F, and 5A  
 **3_16p12.1**: This directory holds scripts related to analyses involving samples from the Girirajan Lab 16p12.1 deletion cohort, including those shown in Fig. 2A-B and S3  
