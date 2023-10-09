@@ -1,7 +1,7 @@
 # Description
 Pipelines and scripts used to perform the bioinformatics analyses examining the parental factors driving pathogenicity of variably expressive variants.
 
-Scripts are primarily organized by the cohort of interest and files related to analyses for each cohort can be found in their respective directories.
+Analyses of each cohort are primarily organized by the cohort of interest and files related to analyses for each cohort can be found in their respective directories.
 
 # Copyright/License
 The code in this repository is free software: you can redistribute it and/or modify
